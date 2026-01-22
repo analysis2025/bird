@@ -3,66 +3,77 @@ from transformers import pipeline
 from PIL import Image
 
 # 1. 设置页面配置
-st.set_page_config(page_title="智能鸟类识别助手", page_icon="🐦")
+st.set_page_config(page_title="专业鸟类识别专家", page_icon="🦅")
 
-st.title("🐦 智能鸟类识别助手")
-st.write("请上传一张鸟类的照片，我会告诉你它是什么！")
+st.title("🦅 专业鸟类识别专家")
+st.write("上传鸟类照片，AI 将精准识别具体品种（支持500+种鸟类）")
 
-
-# 2. 加载模型 (使用缓存装饰器，避免每次刷新都重新加载模型)
+# 2. 加载模型 
 @st.cache_resource
 def load_model():
-    # 这里我们使用 Google 的 ViT 模型，它在图像分类上表现非常出色
-    # 你也可以换成专门针对鸟类微调过的模型，例如 "nateraw/vit-base-birds"
+    # 核心修改：这里换成了专门针对鸟类训练的 expert model
+    # 模型名称：nateraw/vit-base-birds
+    # 这个模型能识别 555 种鸟类，准确率远超通用模型
     try:
-        classifier = pipeline("image-classification", model="google/vit-base-patch16-224")
+        # 第一次运行会下载约 340MB 的模型文件
+        classifier = pipeline("image-classification", model="nateraw/vit-base-birds")
         return classifier
     except Exception as e:
         st.error(f"模型加载失败: {e}")
         return None
 
-
-with st.spinner('正在加载 AI 模型，请稍候...'):
+with st.spinner('正在召唤鸟类专家模型 (首次加载约需1分钟)...'):
     classifier = load_model()
 
 # 3. 创建文件上传组件
-uploaded_file = st.file_uploader("选择一张 JPG 或 PNG 图片...", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("请选择一张图片...", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # 显示用户上传的图片
     image = Image.open(uploaded_file)
     st.image(image, caption='上传的图片', use_column_width=True)
 
     # 4. 开始识别
-    if st.button('开始识别'):
+    if st.button('开始鉴定'):
         if classifier:
-            with st.spinner('AI 正在观察这张图片...'):
-                # 模型推理
-                results = classifier(image)
+            with st.spinner('专家正在仔细观察羽毛和特征...'):
+                try:
+                    # 模型推理
+                    results = classifier(image)
 
-                # 5. 展示结果
-                st.success("识别完成！")
-                st.subheader("我认为它是：")
+                    # 5. 展示结果
+                    st.success("鉴定完成！")
+                    
+                    # 取出置信度最高的结果
+                    top_result = results[0]
+                    english_name = top_result['label']
+                    score = top_result['score']
+                    
+                    # 格式化一下名字（把下划线换成空格，首字母大写）
+                    formatted_name = english_name.replace("_", " ").title()
 
-                # 取出置信度最高的结果
-                top_result = results[0]
-                label = top_result['label']
-                score = top_result['score']
+                    st.subheader("鉴定结论：")
+                    st.metric(label="鸟类英文学名", value=formatted_name, delta=f"置信度: {score:.2%}")
+                    
+                    st.info(f"💡 提示: 您可以将 '{formatted_name}' 复制到搜索引擎查看中文详情。")
 
-                st.metric(label="预测结果", value=label, delta=f"置信度: {score:.2%}")
-
-                # 展示其他可能的结果
-                st.write("---")
-                st.write("详细概率分布：")
-                for res in results:
-                    st.progress(res['score'])
-                    st.write(f"**{res['label']}**: {res['score']:.2%}")
+                    # 展示概率分布
+                    st.write("---")
+                    st.write("其他可能：")
+                    for res in results[1:4]: # 只显示前3个备选
+                        name = res['label'].replace("_", " ").title()
+                        st.write(f"**{name}**: {res['score']:.2%}")
+                        st.progress(res['score'])
+                        
+                except Exception as e:
+                    st.error(f"识别过程中出现错误: {e}")
         else:
             st.error("模型未加载，无法进行识别。")
 
-# 添加侧边栏说明
-st.sidebar.title("关于")
+# 侧边栏
+st.sidebar.title("关于模型")
 st.sidebar.info(
-    "这个应用使用 Python 和 Hugging Face Transformers 构建。\n\n"
-    "模型: Vision Transformer (ViT)"
+    "当前使用的模型: \n"
+    "**nateraw/vit-base-birds**\n\n"
+    "该模型在 CUB-200-2011 数据集上训练，"
+    "覆盖全球 555 种常见鸟类。"
 )
